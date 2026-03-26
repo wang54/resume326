@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>简历智能分析台</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ["Plus Jakarta Sans", "sans-serif"],
+              display: ["Space Grotesk", "sans-serif"],
+            },
+            boxShadow: {
+              soft: "0 18px 60px rgba(15, 23, 42, 0.10)",
+              panel: "0 10px 30px rgba(148, 163, 184, 0.16)",
+            },
+            colors: {
+              ink: "#122033",
+              mist: "#F5F7FB",
+              skyglass: "#DCEAFE",
+              mintglass: "#DDF7EC",
+              coralglass: "#FFE2DE",
+            },
+          },
+        },
+      };
+    </script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <style>
+      [v-cloak] {
+        display: none;
+      }
+
+      body {
+        background:
+          radial-gradient(circle at top left, rgba(191, 219, 254, 0.55), transparent 28%),
+          radial-gradient(circle at top right, rgba(221, 247, 236, 0.7), transparent 26%),
+          linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+      }
+
+      .glass-stroke {
+        position: relative;
+      }
+
+      .glass-stroke::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        padding: 1px;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(203, 213, 225, 0.45));
+        -webkit-mask:
+          linear-gradient(#fff 0 0) content-box,
+          linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+        pointer-events: none;
+      }
+
+      .float-in {
+        animation: floatIn 0.7s ease both;
+      }
+
+      .score-glow {
+        box-shadow:
+          0 18px 45px rgba(14, 165, 233, 0.18),
+          inset 0 1px 0 rgba(255, 255, 255, 0.7);
+      }
+
+      @keyframes floatIn {
+        from {
+          opacity: 0;
+          transform: translateY(18px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body class="min-h-screen text-ink">
+    <div id="app" v-cloak class="min-h-screen">
+      <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+        <div
+          class="glass-stroke mb-6 overflow-hidden rounded-[28px] bg-white/75 p-6 shadow-soft backdrop-blur xl:p-8"
+        >
+          <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+            <div class="max-w-3xl">
+              <p
+                class="mb-3 inline-flex items-center rounded-full bg-skyglass px-4 py-1 text-xs font-semibold tracking-[0.22em] text-sky-800 uppercase"
+              >
+                Resume Intelligence Console
+              </p>
+              <h1 class="font-display text-3xl font-bold tracking-tight text-slate-900 sm:text-5xl">
+                简历与岗位需求的即时匹配分析
+              </h1>
+              <p class="mt-4 max-w-2xl text-sm leading-7 text-slate-600 sm:text-base">
+                上传 PDF 简历，输入岗位描述，一键调用本地 FastAPI 接口完成联调。页面会展示结构化信息、背景意向和匹配度评分。
+              </p>
+              <div class="mt-5 max-w-2xl rounded-2xl bg-slate-50/90 px-4 py-3">
+                <label
+                  for="backendBaseUrl"
+                  class="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
+                >
+                  后端服务地址:
+                </label>
+                <input
+                  id="backendBaseUrl"
+                  v-model.trim="backendBaseUrl"
+                  type="text"
+                  placeholder="http://127.0.0.1:8000"
+                  class="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 outline-none transition focus:border-sky-400 focus:ring-4 focus:ring-sky-100"
+                />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-sm sm:min-w-[320px]">
+              <div class="rounded-2xl bg-slate-50 p-4">
+                <div class="text-slate-400">接口地址</div>
+                <div class="mt-1 font-semibold text-slate-800">POST /api/analyze</div>
+              </div>
+              <div class="rounded-2xl bg-slate-50 p-4">
+                <div class="text-slate-400">联调目标</div>
+                <div class="mt-1 break-all font-semibold text-slate-800">{{ normalizedBackendBaseUrl }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <transition name="fade">
+          <div
+            v-if="errorMessage"
+            class="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-5 py-4 text-sm text-rose-700 shadow-panel"
+          >
+            <div class="flex items-start gap-3">
+              <div
+                class="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rose-100 font-bold text-rose-600"
+              >
+                !
+              </div>
+              <div>
+                <div class="font-semibold">分析失败</div>
+                <div class="mt-1 leading-6">{{ errorMessage }}</div>
+              </div>
+            </div>
+          </div>
+        </transition>
+
+        <div class="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+          <section
+            class="glass-stroke rounded-[28px] bg-white/85 p-6 shadow-soft backdrop-blur float-in xl:p-7"
+          >
+            <div class="mb-6 flex items-center justify-between">
+              <div>
+                <h2 class="font-display text-2xl font-bold text-slate-900">提交分析任务</h2>
+                <p class="mt-2 text-sm leading-6 text-slate-500">
+                  支持上传 PDF 简历文件，并附带岗位需求文本进行匹配分析。
+                </p>
+              </div>
+              <div
+                class="hidden rounded-2xl bg-gradient-to-br from-sky-100 to-emerald-100 px-4 py-3 text-right text-xs text-slate-600 sm:block"
+              >
+                <div class="font-semibold text-slate-800">前端联调模式</div>
+                <div class="mt-1">零构建 · 单文件 · 本地直连</div>
+              </div>
+            </div>
+
+            <form class="space-y-6" @submit.prevent="submitAnalysis">
+              <div>
+                <label class="mb-3 block text-sm font-semibold text-slate-700">上传 PDF 简历</label>
+                <label
+                  for="resumeFile"
+                  class="group block cursor-pointer rounded-[24px] border border-dashed border-slate-300 bg-gradient-to-br from-slate-50 to-white p-5 transition hover:-translate-y-0.5 hover:border-sky-400 hover:shadow-panel"
+                >
+                  <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <div class="font-display text-lg font-bold text-slate-900">
+                        {{ fileName || '选择一个 PDF 简历文件' }}
+                      </div>
+                      <p class="mt-1 text-sm text-slate-500">
+                        推荐上传文字可提取的 PDF。若解析失败，页面会直接展示错误提示。
+                      </p>
+                    </div>
+                    <div
+                      class="inline-flex items-center rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition group-hover:bg-sky-600"
+                    >
+                      浏览文件
+                    </div>
+                  </div>
+                  <input
+                    id="resumeFile"
+                    ref="fileInput"
+                    class="sr-only"
+                    type="file"
+                    accept=".pdf"
+                    @change="handleFileChange"
+                  />
+                </label>
+              </div>
+
+              <div>
+                <label for="jobDescription" class="mb-3 block text-sm font-semibold text-slate-700">
+                  岗位需求 Job Description
+                </label>
+                <textarea
+                  id="jobDescription"
+                  v-model.trim="jobDescription"
+                  rows="10"
+                  placeholder="例如：我们正在招聘 Python 后端开发工程师，要求熟悉 FastAPI、MySQL、Docker，具备 API 设计和项目交付经验。"
+                  class="w-full rounded-[24px] border border-slate-200 bg-slate-50/80 px-5 py-4 text-sm leading-7 text-slate-700 shadow-inner outline-none transition focus:border-sky-400 focus:bg-white focus:ring-4 focus:ring-sky-100"
+                ></textarea>
+              </div>
+
+              <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <button
+                  type="submit"
+                  :disabled="loading"
+                  class="inline-flex min-w-[210px] items-center justify-center gap-3 rounded-full bg-slate-900 px-6 py-4 font-semibold text-white shadow-panel transition hover:-translate-y-0.5 hover:bg-sky-600 disabled:cursor-not-allowed disabled:bg-slate-400"
+                >
+                  <span
+                    v-if="loading"
+                    class="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white"
+                  ></span>
+                  <span>{{ loading ? '智能分析进行中...' : '开始智能分析' }}</span>
+                </button>
+                <button
+                  type="button"
+                  @click="resetForm"
+                  class="inline-flex items-center justify-center rounded-full border border-slate-200 bg-white px-6 py-4 font-semibold text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                >
+                  重置
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section class="space-y-6">
+            <div
+              class="glass-stroke rounded-[28px] bg-white/85 p-6 shadow-soft backdrop-blur float-in xl:p-7"
+            >
+              <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+                <div class="max-w-sm">
+                  <h2 class="font-display text-2xl font-bold text-slate-900">匹配结果</h2>
+                  <p class="mt-2 text-sm leading-6 text-slate-500">
+                    核心评分区域会在接口返回后自动更新，帮助你快速判断简历与岗位的贴合度。
+                  </p>
+                </div>
+
+                <div
+                  class="score-glow relative mx-auto flex h-56 w-56 items-center justify-center rounded-full bg-white"
+                  :style="scoreRingStyle"
+                >
+                  <div class="flex h-[78%] w-[78%] flex-col items-center justify-center rounded-full bg-white">
+                    <div class="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">
+                      Match Score
+                    </div>
+                    <div class="mt-2 font-display text-6xl font-bold text-slate-900">
+                      {{ displayScore }}
+                    </div>
+                    <div class="mt-1 text-sm text-slate-500">综合匹配度</div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                class="mt-6 rounded-[24px] bg-gradient-to-r from-sky-50 to-emerald-50 p-5"
+              >
+                <div class="text-sm font-semibold text-slate-700">匹配理由</div>
+                <p class="mt-2 text-sm leading-7 text-slate-600">
+                  {{ matchReason }}
+                </p>
+              </div>
+            </div>
+
+            <div
+              class="glass-stroke rounded-[28px] bg-white/85 p-6 shadow-soft backdrop-blur float-in xl:p-7"
+            >
+              <div class="grid gap-6 md:grid-cols-2">
+                <div class="rounded-[24px] bg-slate-50 p-5">
+                  <div class="mb-4 flex items-center justify-between">
+                    <h3 class="font-display text-xl font-bold text-slate-900">基本信息</h3>
+                    <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-500">
+                      Basic Info
+                    </span>
+                  </div>
+                  <div class="space-y-3 text-sm">
+                    <div class="rounded-2xl bg-white px-4 py-3">
+                      <div class="text-slate-400">姓名</div>
+                      <div class="mt-1 font-semibold text-slate-800">{{ basicInfo.name || '-' }}</div>
+                    </div>
+                    <div class="rounded-2xl bg-white px-4 py-3">
+                      <div class="text-slate-400">电话</div>
+                      <div class="mt-1 font-semibold text-slate-800">{{ basicInfo.phone || '-' }}</div>
+                    </div>
+                    <div class="rounded-2xl bg-white px-4 py-3">
+                      <div class="text-slate-400">邮箱</div>
+                      <div class="mt-1 font-semibold text-slate-800 break-all">
+                        {{ basicInfo.email || '-' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-[24px] bg-slate-50 p-5">
+                  <div class="mb-4 flex items-center justify-between">
+                    <h3 class="font-display text-xl font-bold text-slate-900">背景与意向</h3>
+                    <span class="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-500">
+                      Background
+                    </span>
+                  </div>
+
+                  <div class="space-y-3 text-sm">
+                    <div class="rounded-2xl bg-white px-4 py-3">
+                      <div class="text-slate-400">目标岗位</div>
+                      <div class="mt-1 font-semibold text-slate-800">
+                        {{ jobIntention.target_position || '-' }}
+                      </div>
+                    </div>
+                    <div class="rounded-2xl bg-white px-4 py-3">
+                      <div class="text-slate-400">意向城市 / 类型</div>
+                      <div class="mt-1 font-semibold text-slate-800">
+                        {{ formatIntention(jobIntention.target_city, jobIntention.employment_type) }}
+                      </div>
+                    </div>
+                    <div class="rounded-2xl bg-white px-4 py-3">
+                      <div class="text-slate-400">教育背景</div>
+                      <div class="mt-1 font-semibold text-slate-800">
+                        {{ background.education || '-' }}
+                      </div>
+                    </div>
+                    <div class="rounded-2xl bg-white px-4 py-3">
+                      <div class="text-slate-400">工作年限</div>
+                      <div class="mt-1 font-semibold text-slate-800">
+                        {{ background.years_of_experience || '-' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="mt-6 rounded-[24px] bg-slate-50 p-5">
+                <div class="mb-3 flex items-center justify-between">
+                  <h3 class="font-display text-xl font-bold text-slate-900">核心技能标签</h3>
+                  <span class="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">
+                    Skills
+                  </span>
+                </div>
+                <div class="flex flex-wrap gap-3">
+                  <template v-if="backgroundSkills.length">
+                    <span
+                      v-for="skill in backgroundSkills"
+                      :key="skill"
+                      class="rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm"
+                    >
+                      {{ skill }}
+                    </span>
+                  </template>
+                  <span
+                    v-else
+                    class="rounded-full bg-white px-4 py-2 text-sm text-slate-400"
+                  >
+                    暂无技能信息
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="result"
+              class="glass-stroke rounded-[28px] bg-slate-950 p-6 text-slate-100 shadow-soft float-in"
+            >
+              <div class="mb-3 flex items-center justify-between">
+                <h3 class="font-display text-xl font-bold">原始 JSON 结果</h3>
+                <button
+                  type="button"
+                  @click="copyResult"
+                  class="rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/20"
+                >
+                  复制结果
+                </button>
+              </div>
+              <pre class="overflow-x-auto rounded-2xl bg-black/20 p-4 text-xs leading-6 text-slate-200">{{ prettyResult }}</pre>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const { createApp } = Vue;
+
+      createApp({
+        data() {
+          return {
+            loading: false,
+            errorMessage: "",
+            selectedFile: null,
+            fileName: "",
+            backendBaseUrl: "http://127.0.0.1:8000",
+            jobDescription: "",
+            result: null,
+          };
+        },
+        computed: {
+          normalizedBackendBaseUrl() {
+            return (this.backendBaseUrl || "").trim().replace(/\/+$/, "");
+          },
+          basicInfo() {
+            return this.result?.basic_info || {};
+          },
+          jobIntention() {
+            return this.result?.job_intention || {};
+          },
+          background() {
+            return this.result?.background || {};
+          },
+          backgroundSkills() {
+            return Array.isArray(this.background.core_skills) ? this.background.core_skills : [];
+          },
+          displayScore() {
+            const score = this.result?.match_analysis?.score;
+            return typeof score === "number" ? score : "--";
+          },
+          matchReason() {
+            return (
+              this.result?.match_analysis?.reason ||
+              "等待分析结果。提交文件后，这里会展示岗位匹配原因。"
+            );
+          },
+          scoreRingStyle() {
+            const score = typeof this.result?.match_analysis?.score === "number"
+              ? Math.max(0, Math.min(100, this.result.match_analysis.score))
+              : 0;
+            return {
+              background: `conic-gradient(#0ea5e9 0 ${score}%, #22c55e ${score}% ${Math.min(
+                score + 12,
+                100
+              )}%, #e2e8f0 ${Math.min(score + 12, 100)}% 100%)`,
+            };
+          },
+          prettyResult() {
+            return this.result ? JSON.stringify(this.result, null, 2) : "";
+          },
+        },
+        methods: {
+          handleFileChange(event) {
+            const [file] = event.target.files || [];
+            this.selectedFile = file || null;
+            this.fileName = file ? file.name : "";
+            this.errorMessage = "";
+          },
+          formatIntention(city, type) {
+            const values = [city, type].filter(Boolean);
+            return values.length ? values.join(" / ") : "-";
+          },
+          async submitAnalysis() {
+            this.errorMessage = "";
+
+            if (!this.selectedFile) {
+              this.errorMessage = "请先选择一个 PDF 简历文件。";
+              return;
+            }
+
+            if (!this.jobDescription) {
+              this.errorMessage = "请填写岗位需求描述。";
+              return;
+            }
+
+            this.loading = true;
+
+            try {
+              const formData = new FormData();
+              formData.append("file", this.selectedFile);
+              formData.append("job_description", this.jobDescription);
+
+              if (!this.normalizedBackendBaseUrl) {
+                throw new Error("请先填写后端服务地址。");
+              }
+
+              const response = await fetch(`${this.normalizedBackendBaseUrl}/api/analyze`, {
+                method: "POST",
+                body: formData,
+              });
+
+              let payload = null;
+              try {
+                payload = await response.json();
+              } catch (error) {
+                payload = null;
+              }
+
+              if (!response.ok || !payload || payload.code !== 0) {
+                const message =
+                  payload?.message ||
+                  payload?.detail ||
+                  `请求失败，状态码 ${response.status}`;
+                throw new Error(message);
+              }
+
+              this.result = payload.data;
+            } catch (error) {
+              this.result = null;
+              this.errorMessage =
+                error instanceof Error
+                  ? error.message
+                  : "请求失败，请检查后端服务是否已启动。";
+            } finally {
+              this.loading = false;
+            }
+          },
+          async copyResult() {
+            if (!this.prettyResult) {
+              return;
+            }
+
+            try {
+              await navigator.clipboard.writeText(this.prettyResult);
+            } catch (error) {
+              this.errorMessage = "复制失败，请手动复制原始 JSON。";
+            }
+          },
+          resetForm() {
+            this.loading = false;
+            this.errorMessage = "";
+            this.selectedFile = null;
+            this.fileName = "";
+            this.jobDescription = "";
+            this.result = null;
+            if (this.$refs.fileInput) {
+              this.$refs.fileInput.value = "";
+            }
+          },
+        },
+      }).mount("#app");
+    </script>
+  </body>
+</html>
